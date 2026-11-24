@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>캠핑 시뮬레이터</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        stone: { 850: '#1c1917', 900: '#0c0a09' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            height: 100dvh;
+            transition: background 0.5s ease, color 0.5s ease;
+        }
+
+        /* Light Mode */
+        body:not(.dark) {
+            background: linear-gradient(180deg, #fd511d 0%, #f5ca30 50%, #f6ef70 100%);
+            color: #44403c;
+        }
+
+        /* Dark Mode */
+        body.dark {
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 2px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 3px);
+            background-size: 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+            color: #e7e5e4;
+        }
+
+        .scroll-hide::-webkit-scrollbar { display: none; }
+        .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: background 0.3s, border-color 0.3s;
+        }
+        .dark .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e7e5e4;
+        }
+
+        /* Sticky Headers */
+        .sticky-col-header { position: sticky; top: 0; z-index: 20; background-color: rgba(250, 250, 249, 0.95); }
+        .dark .sticky-col-header { background-color: rgba(30, 41, 59, 0.95); color: #e7e5e4; }
+        .sticky-row-header { position: sticky; left: 0; z-index: 10; background-color: rgba(250, 250, 249, 0.95); border-right: 1px solid #e7e5e4; }
+        .dark .sticky-row-header { background-color: rgba(30, 41, 59, 0.95); border-right: 1px solid #475569; }
+        .sticky-corner { position: sticky; top: 0; left: 0; z-index: 30; background-color: rgba(250, 250, 249, 1); }
+        .dark .sticky-corner { background-color: rgba(30, 41, 59, 1); }
+
+        .log-item { border-left-width: 4px; }
+        .dark .log-item { background-color: #1e293b; color: #e7e5e4; }
+        
+        .fab-btn {
+            position: fixed; right: 1.5rem; bottom: 6rem; z-index: 50;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .fab-btn:active { transform: scale(0.95); }
+    </style>
+</head>
+<body class="flex flex-col overflow-hidden text-stone-700">
+
+    <!-- Header -->
+    <header class="h-14 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-stone-200 dark:border-slate-700 flex items-center justify-between px-4 z-10 shrink-0 transition-colors">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-fire-burner text-amber-600 text-xl"></i>
+            <h1 class="text-lg font-bold text-stone-800 dark:text-stone-100 tracking-tight">캠핑 시뮬레이터 <a href="https://x.com/bb_uu_t" target="_blank" class="text-sm text-amber-600 dark:text-amber-400 hover:underline mt-1 inline-block">@bb_uu_t</a></h1>
+        </div>
+        <div class="flex items-center gap-3">
+             <button onclick="toggleInfoModal()" class="w-8 h-8 rounded-full bg-stone-100 dark:bg-slate-700 flex items-center justify-center text-stone-500 dark:text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <button onclick="toggleDarkMode()" class="w-8 h-8 rounded-full bg-stone-100 dark:bg-slate-700 flex items-center justify-center text-stone-500 dark:text-amber-300 transition-colors">
+                <i class="fa-solid fa-moon dark:hidden"></i>
+                <i class="fa-solid fa-sun hidden dark:inline"></i>
+            </button>
+            <div class="bg-amber-100 dark:bg-slate-700 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-xs font-bold">
+                Day <span id="day-display">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-hidden relative">
+        
+        <!-- Tab 1: Member List -->
+        <section id="tab-members" class="absolute inset-0 p-4 overflow-y-auto scroll-hide pb-24 transition-opacity duration-300">
+            <div class="max-w-3xl mx-auto space-y-5">
+                <!-- Add Member -->
+                <div class="glass-panel rounded-2xl p-5">
+                    <h2 class="text-base font-bold mb-3 flex items-center gap-2 dark:text-stone-200">
+                        <i class="fa-solid fa-user-plus text-stone-400"></i> 멤버 등록
+                    </h2>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-name" placeholder="이름 입력" 
+                            class="flex-1 px-4 py-2 rounded-xl border border-stone-200 dark:border-slate-600 focus:outline-none focus:border-amber-500 bg-white/80 dark:bg-slate-800 dark:text-stone-200 transition-colors text-sm" 
+                            maxlength="8">
+                        <button onclick="addCharacter()" class="bg-stone-800 dark:bg-stone-700 hover:bg-stone-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm whitespace-nowrap">
+                            등록
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-stone-400 mt-2 ml-1">* 최대 20명 등록 가능합니다.</p>
+                </div>
+
+                <!-- Trait Table -->
+                <div class="glass-panel rounded-2xl p-5 overflow-hidden flex flex-col relative">
+                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                        <h2 class="text-base font-bold flex items-center gap-2 dark:text-stone-200">
+                            <i class="fa-solid fa-list-check text-stone-400"></i> 성향 체크리스트
+                        </h2>
+                        <div class="flex gap-2">
+                             <button onclick="downloadTableImage()" class="bg-stone-200 dark:bg-slate-600 text-stone-600 dark:text-stone-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 dark:hover:bg-slate-500 transition-colors" title="이미지로 저장">
+                                <i class="fa-solid fa-camera"></i>
+                            </button>
+                            <button onclick="randomizeTraits()" class="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm" title="모든 성향 랜덤 지정">
+                                <i class="fa-solid fa-dice"></i> 랜덤
+                            </button>
+                            <button onclick="saveAndStart()" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md transition-all active:scale-95">
+                                <i class="fa-solid fa-play mr-1"></i> 캠핑 시작
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto relative rounded-lg border border-stone-200 dark:border-slate-600" id="trait-table-container">
+                        <table class="w-full text-sm text-left border-collapse" id="trait-table">
+                            <thead class="text-xs text-stone-500 dark:text-stone-400 uppercase bg-stone-50 dark:bg-slate-800">
+                                <tr id="table-header-row"></tr>
+                            </thead>
+                            <tbody id="trait-table-body" class="divide-y divide-stone-100 dark:divide-slate-700 bg-white dark:bg-slate-800/50"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="empty-state" class="text-center py-12 text-stone-400 dark:text-slate-500">
+                        <i class="fa-solid fa-campground text-3xl mb-2 opacity-30"></i>
+                        <p class="text-sm">캐릭터를 등록하여 시작하세요.</p>
+                    </div>
+                </div>
+
+                <!-- Data Management Panel -->
+                <div class="glass-panel rounded-2xl p-5">
+                    <h2 class="text-base font-bold mb-3 flex items-center gap-2 dark:text-stone-200">
+                        <i class="fa-solid fa-floppy-disk text-stone-400"></i> 데이터 관리
+                    </h2>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="saveLocal()" class="bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-stone-600 dark:text-stone-300 py-2 rounded-xl text-xs font-medium hover:bg-stone-50 dark:hover:bg-slate-600 transition-colors">
+                            <i class="fa-solid fa-download mr-1"></i> 로컬 저장
+                        </button>
+                        <button onclick="loadLocal()" class="bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-stone-600 dark:text-stone-300 py-2 rounded-xl text-xs font-medium hover:bg-stone-50 dark:hover:bg-slate-600 transition-colors">
+                            <i class="fa-solid fa-upload mr-1"></i> 로컬 불러오기
+                        </button>
+                        
+                        <div class="col-span-2 border-t border-stone-100 dark:border-slate-700 my-1"></div>
+                        
+                        <button onclick="exportJSON()" class="bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-stone-600 dark:text-stone-300 py-2 rounded-xl text-xs font-medium hover:bg-stone-50 dark:hover:bg-slate-600 transition-colors">
+                            <i class="fa-solid fa-file-export mr-1"></i> 전체 백업 (JSON)
+                        </button>
+                        <button onclick="exportRosterJSON()" class="bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-stone-600 dark:text-stone-300 py-2 rounded-xl text-xs font-medium hover:bg-stone-50 dark:hover:bg-slate-600 transition-colors">
+                            <i class="fa-solid fa-user-group mr-1"></i> 명부만 내보내기
+                        </button>
+                        
+                        <input type="file" id="fileInput" style="display:none" onchange="importJSON(this)">
+                        <button onclick="document.getElementById('fileInput').click()" class="col-span-2 bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-stone-600 dark:text-stone-300 py-2 rounded-xl text-xs font-medium hover:bg-stone-50 dark:hover:bg-slate-600 transition-colors">
+                            <i class="fa-solid fa-file-import mr-1"></i> 파일 불러오기
+                        </button>
+                        
+                        <div class="col-span-2 border-t border-stone-100 dark:border-slate-700 my-1"></div>
+
+                        <button onclick="restartWithRoster()" class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 text-red-600 dark:text-red-400 py-2 rounded-xl text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> 이 명부로 다시 시작
+                        </button>
+                        <button onclick="clearData()" class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 text-red-600 dark:text-red-400 py-2 rounded-xl text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                            <i class="fa-solid fa-trash mr-1"></i> 초기화
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Campsite -->
+        <section id="tab-camp" class="absolute inset-0 p-4 overflow-y-auto scroll-hide pb-24 hidden opacity-0 transition-opacity duration-300">
+            <div class="max-w-5xl mx-auto h-full flex flex-col">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20" id="camp-map">
+                    <!-- Zones generated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 3: Logs -->
+        <section id="tab-logs" class="absolute inset-0 p-4 overflow-y-auto pb-24 hidden opacity-0 transition-opacity duration-300">
+            <div class="glass-panel dark:bg-slate-900 rounded-2xl p-5 min-h-[50vh] max-w-3xl mx-auto">
+                <div class="flex justify-between items-end mb-6 border-b border-stone-100 dark:border-slate-700 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-stone-800 dark:text-stone-100">캠핑 일지</h2>
+                        <p class="text-stone-500 dark:text-stone-400 text-xs mt-1">숲속에서 일어난 이야기들</p>
+                    </div>
+                </div>
+                <div id="log-container" class="space-y-3"></div>
+                <div id="log-end-anchor"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Floating Action Button -->
+    <button onclick="nextDay()" id="btn-next-day" class="fab-btn w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-500 text-white shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-stone-400 dark:shadow-slate-900/50 transition-colors duration-300">
+        <i class="fa-solid fa-play text-xl pl-1"></i>
+    </button>
+
+    <!-- Bottom Navigation -->
+    <nav class="h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-t border-stone-200 dark:border-slate-700 flex justify-evenly items-center px-6 shrink-0 z-20 transition-colors">
+        <button onclick="switchTab('members')" class="nav-btn active flex flex-col items-center gap-1 text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors w-16" data-tab="members">
+            <i class="fa-solid fa-clipboard-user text-lg"></i>
+            <span class="text-[10px] font-medium">명단</span>
+        </button>
+        <button onclick="switchTab('camp')" class="nav-btn flex flex-col items-center gap-1 text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors w-16" data-tab="camp">
+            <i class="fa-solid fa-map-location-dot text-lg"></i>
+            <span class="text-[10px] font-medium">캠핑장</span>
+        </button>
+        <button onclick="switchTab('logs')" class="nav-btn flex flex-col items-center gap-1 text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors w-16" data-tab="logs">
+            <i class="fa-solid fa-book-open text-lg"></i>
+            <span class="text-[10px] font-medium">로그</span>
+        </button>
+    </nav>
+
+    <!-- Modal for details -->
+    <div id="modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-fade-in text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-slate-600">
+            <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
+            <div id="modal-content" class="space-y-2 text-stone-600 dark:text-stone-300"></div>
+            <button onclick="closeModal()" class="mt-6 w-full bg-stone-100 dark:bg-slate-700 hover:bg-stone-200 dark:hover:bg-slate-600 text-stone-800 dark:text-stone-200 py-3 rounded-xl font-medium transition-colors">닫기</button>
+        </div>
+    </div>
+
+    <!-- Modal for Info -->
+    <div id="info-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-slate-600 relative">
+            <button onclick="toggleInfoModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-600">
+                    <i class="fa-solid fa-fire-burner text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-bold">캠핑 시뮬레이터</h3>
+                <a href="https://x.com/bb_uu_t" target="_blank" class="text-sm text-amber-600 dark:text-amber-400 hover:underline mt-1 inline-block">@bb_uu_t</a>
+            </div>
+            <div class="space-y-3 text-sm text-stone-600 dark:text-stone-300 text-center">
+                <p>이 프로그램은 다음과 같은 오픈 소스 라이브러리를 사용합니다.</p>
+                <ul class="list-disc list-inside text-left max-w-xs mx-auto">
+                    <li><a href="https://tailwindcss.com/" target="_blank" class="text-amber-600 dark:text-amber-400 hover:underline">Tailwind CSS</a></li>
+                    <li><a href="https://html2canvas.hertzen.com/" target="_blank" class="text-amber-600 dark:text-amber-400 hover:underline">html2canvas</a></li>
+                    <li><a href="https://fontawesome.com/" target="_blank" class="text-amber-600 dark:text-amber-400 hover:underline">Font Awesome</a></li>
+                    <li><a href="https://fonts.google.com/specimen/Noto+Sans+KR" target="_blank" class="text-amber-600 dark:text-amber-400 hover:underline">Noto Sans KR</a></li>
+                </ul>
+                <p class="text-[10px] text-stone-400 mt-4">© 2026 Camping Simulator</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4"></div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/60 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in border border-stone-200 dark:border-slate-600 text-stone-800 dark:text-stone-200">
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><i class="fa-solid fa-circle-exclamation text-amber-500"></i> 확인</h3>
+            <p id="confirm-message" class="text-sm text-stone-600 dark:text-stone-300 mb-6"></p>
+            <div class="flex gap-2 justify-end">
+                <button id="btn-confirm-cancel" class="px-4 py-2 rounded-xl text-sm font-medium bg-stone-100 dark:bg-slate-700 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-slate-600 transition-colors">취소</button>
+                <button id="btn-confirm-ok" class="px-4 py-2 rounded-xl text-sm font-medium bg-amber-600 text-white hover:bg-amber-500 transition-colors">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- UI Helpers (Toast & Confirm) ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgColor = 'bg-stone-800 dark:bg-slate-700';
+            let icon = 'fa-info-circle text-blue-400';
+            
+            if (type === 'success') {
+                icon = 'fa-check-circle text-green-400';
+            } else if (type === 'error') {
+                icon = 'fa-exclamation-circle text-red-400';
+            }
+
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm transform transition-all duration-300 -translate-y-4 opacity-0 pointer-events-auto w-full`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('-translate-y-4', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('-translate-y-4', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        let confirmCallback = null;
+        function showConfirm(message, callback) {
+            document.getElementById('confirm-message').innerHTML = message;
+            confirmCallback = callback;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            confirmCallback = null;
+        });
+
+        document.getElementById('btn-confirm-ok').addEventListener('click', () => {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            if (confirmCallback) confirmCallback();
+            confirmCallback = null;
+        });
+
+
+        // --- Data Definitions ---
+        const ZONES = [
+            { id: 'tent', name: '텐트 구역', icon: 'fa-tent', color: 'bg-orange-50/80 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' },
+            { id: 'fire', name: '모닥불', icon: 'fa-fire', color: 'bg-red-50/80 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
+            { id: 'cook', name: '야외 키친', icon: 'fa-kitchen-set', color: 'bg-yellow-50/80 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' },
+            { id: 'stream', name: '계곡', icon: 'fa-water', color: 'bg-blue-50/80 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
+            { id: 'forest', name: '숲 산책로', icon: 'fa-tree', color: 'bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' },
+            { id: 'hammock', name: '해먹 존', icon: 'fa-umbrella-beach', color: 'bg-purple-50/80 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' }
+        ];
+
+        const VOCAB = {
+            food: [
+                '바베큐', '라면', '김치찌개', '볶음밥', '어묵탕', '된장찌개', '스테이크', 
+                '삼겹살', '부대찌개', '토마호크', '비어치킨', '닭꼬치', '군고구마', '마시멜로', 
+                '카레', '핫도그', '옥수수', '감자구이', '채소구이', '생선구이', '꼬치구이', 
+                '감바스', '샌드위치', '샐러드', '밀푀유나베', '파전', '우동', '떡볶이'
+            ],
+            snack: [
+                '초코칩 쿠키', '나초', '육포', '감자칩', '오징어 땅콩', '팝콘', '초콜릿', 
+                '젤리', '견과류', '구운 귤', '마카롱', '프레첼', '비스킷', '버터구이 오징어', '크래커'
+            ],
+            gear: [
+                '티타늄 컵', '경량 의자', '고급 텐트', '감성 랜턴', '가스 버너', '침낭', 
+                '해먹', '장작', '화로', '아이스박스', '블루투스 스피커', '캠핑용 칼', '멀티툴', 
+                '캠핑 테이블', '휴대용 그릴', '파라솔', '워터저그', '헤드랜턴', '야전침대', 
+                '팩망치', '윈드스크린', '커피 드리퍼', '코펠'
+            ],
+            animal: [
+                '다람쥐', '청설모', '고라니', '반딧불이', '길고양이', '올빼미', '산토끼', 
+                '오소리', '딱따구리', '개구리', '아기곰', '여우', '노루', '담비', '족제비', 
+                '까치', '수달', '꿩', '두꺼비', '산새'
+            ],
+            plant: [
+                '단풍나무', '소나무', '이끼', '야생화', '강아지풀', '고사리', '민들레', 
+                '도토리', '은행잎', '나뭇가지', '버섯', '갈대', '억새', '산딸기', 
+                '쑥', '토끼풀', '솔방울', '담쟁이덩굴', '클로버'
+            ],
+            bug: [
+                '모기', '나방', '거미', '파리', '개미', '송충이', '풍뎅이', '귀뚜라미', 
+                '사슴벌레', '매미', '나비', '꿀벌', '잠자리', '무당벌레', '장수풍뎅이', '여치'
+            ],
+            activity: [
+                '산책', '낮잠', '독서', '요리', '설거지', '불멍', '별 구경', '사진 촬영', 
+                '음악 감상', '대화', '게임', '낚시', '명상', '체조', '그림 그리기', 
+                '커피 내리기', '장작 패기', '스트레칭', '일기 쓰기', '텐트 꾸미기', '풍경 감상'
+            ]
+        };
+
+        const TRAIT_DATA = {
+            cook: { text: '요리를 잘한다', icon: 'fa-utensils', room: 'cook',
+                success: {
+                    yes: ["{name}은(는) 준비한 재료로 완벽한 {food}을(를) 만들어냈다.", "{name}의 능숙한 요리 솜씨에 주변 사람들의 시선이 모인다."],
+                    no: ["{name}은(는) 조리법을 꼼꼼히 읽으며 무난한 {food}을(를) 완성했다.", "{name}은(는) 간편식을 조리하며 소박한 식사를 즐긴다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 무리하게 간을 맞추려다 {food}의 맛을 망쳤다.", "{name}은(는) 불 조절에 실패해 {food}의 겉부분을 태웠다."],
+                    no: ["{name}은(는) {food}의 불 조절에 실패해 정체를 알 수 없는 음식을 만들었다.", "{name}은(는) 냄비 바닥에 {food}을(를) 심하게 태우고 당황한다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 훌륭한 호흡으로 근사한 {food}을(를) 차려냈다.", "{name}와(과) {partner}은(는) 서로의 요리 실력을 칭찬하며 식사를 즐긴다."],
+                        fail: ["{name}와(과) {partner}의 의견이 충돌하여 {food}에 소금이 두 번 들어갔다.", "{name}와(과) {partner}은(는) 복잡한 조리를 시도하다 {food}을(를) 망쳤다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 간단한 식사에도 즐거워한다.", "{name}와(과) {partner}은(는) 다른 사람이 해준 음식이 가장 맛있다며 미소 짓는다."],
+                        fail: ["{name}와(과) {partner}은(는) 서로 요리를 미루다가 식사 시간을 놓쳤다.", "{name}와(과) {partner}은(는) 물 조절에 실패하여 싱거운 {food}을(를) 먹었다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 만든 {food}을(를) {partner}이(가) 맛있게 먹는다.", "{name}이(가) 요리하는 동안 {partner}은(는) 곁에서 재료 준비를 돕는다."],
+                        fail: ["{name}이(가) 정성껏 만든 {food}에 {partner}이(가) 임의로 재료를 추가했다.", "{name}이(가) 요리하는 데 {partner}이(가) 간섭하여 가벼운 말다툼이 일어났다."]
+                    }
+                }
+            },
+            rich: { text: '장비 욕심이 많다', icon: 'fa-gem', room: 'tent',
+                success: {
+                    yes: ["{name}은(는) 새로 구매한 {gear}을(를) 꺼내며 흐뭇해한다.", "{name}은(는) {gear}의 성능을 확인하며 만족스러운 미소를 짓는다."],
+                    no: ["{name}은(는) 주변의 돌과 나뭇가지를 활용해 유용한 도구를 만들었다.", "{name}은(는) 최소한의 장비로 소박한 캠핑의 매력을 보여준다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 고가의 {gear} 사용법이 익숙하지 않아 시간을 지체했다.", "{name}은(는) 아끼는 {gear}에 흠집이 생겨 속상해한다."],
+                    no: ["{name}은(는) 주변의 화려한 장비들을 보며 약간의 아쉬움을 느낀다.", "{name}은(는) {gear}이(가) 부족하여 겪는 불편함을 감수하고 있다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 서로의 {gear}을(를) 구경하며 대화를 나눈다.", "{name}와(과) {partner}은(는) 장비 전시장처럼 잘 갖춰진 공간을 마련했다."],
+                        fail: ["{name}와(과) {partner}은(는) 좁은 텐트에 장비가 가득 차 머물 공간이 부족해졌다.", "{name}와(과) {partner}은(는) 서로의 장비를 비교하며 가벼운 논쟁을 벌였다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 돗자리 하나만으로도 충분히 즐거워한다.", "{name}와(과) {partner}은(는) 자연 그대로를 느끼며 편안한 대화를 나눈다."],
+                        fail: ["{name}와(과) {partner}은(는) 준비 부족으로 서로를 탓했다.", "{name}와(과) {partner}은(는) 잠자리가 불편하여 깊은 잠을 이루지 못했다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) {partner}에게 유용한 {gear}의 장점을 설명해주었다.", "{name}의 편안한 텐트에 {partner}이(가) 머무르며 감탄했다."],
+                        fail: ["{name}이(가) 장비 이야기를 너무 길게 하여 {partner}이(가) 지루해했다.", "{name}의 복잡한 장비 설치를 돕던 {partner}이(가) 금세 지쳐버렸다."]
+                    }
+                }
+            },
+            clean: { text: '깔끔한 성격이다', icon: 'fa-broom', room: 'tent',
+                success: {
+                    yes: ["{name}은(는) 텐트 내부를 구석구석 깨끗하게 청소했다.", "{name}은(는) 설거지를 마친 식기들을 가지런히 정리했다."],
+                    no: ["{name}은(는) 옷에 흙이 조금 묻어도 크게 신경 쓰지 않는다.", "{name}은(는) 바닥에 떨어진 음식을 주워 먹으려다 이내 포기한다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 신발에 묻은 진흙이 신경 쓰여 온전히 휴식하지 못한다.", "{name}은(는) 주변의 {bug}을(를) 보고 크게 놀라 소독제를 찾는다."],
+                    no: ["{name}은(는) 텐트 안에 음식물을 흘려 곤충들을 끌어들였다.", "{name}은(는) 깨끗하지 않은 컵을 사용하려다 망설인다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 주변 공간을 함께 정돈한다.", "{name}와(과) {partner}은(는) 서로 청결을 유지하며 쾌적하게 지낸다."],
+                        fail: ["{name}와(과) {partner}은(는) 청소 방식의 차이로 가벼운 마찰을 빚었다.", "{name}와(과) {partner}은(는) 바깥의 먼지가 신경 쓰여 텐트 안에만 머물렀다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 주변 환경에 얽매이지 않고 편안하게 지낸다.", "{name}와(과) {partner}은(는) 흙 묻은 손으로 가볍게 인사하며 웃었다."],
+                        fail: ["{name}와(과) {partner}은(는) 정리를 미루다 개미들의 방문을 받았다.", "{name}와(과) {partner}의 머무는 자리에 야생동물이 기웃거리기 시작했다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 주변을 정돈하자 {partner}도 자연스럽게 거든다.", "{name}이(가) 깔끔하게 정리한 공간에서 {partner}이(가) 편안하게 휴식을 취했다."],
+                        fail: ["{name}이(가) 계속 정돈을 요구하자 {partner}이(가) 피곤해한다.", "{name}이(가) 정리해둔 물건을 {partner}이(가) 어지럽혀 분위기가 어색해졌다."]
+                    }
+                }
+            },
+            lazy: { text: '움직이길 싫어한다', icon: 'fa-bed', room: 'hammock',
+                success: {
+                    yes: ["{name}은(는) 해먹에 누워 여유롭게 하늘을 바라본다.", "{name}은(는) 최소한의 움직임으로 모든 일을 해결하는 요령을 피운다."],
+                    no: ["{name}은(는) 부지런히 주변을 살피며 땔감을 모았다.", "{name}은(는) 아침 일찍 일어나 텐트를 정비한다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 자리에서 일어나기 귀찮아하다가 불편함을 겪었다.", "{name}은(는) 계속 누워만 있다가 식사 시간을 놓쳤다."],
+                    no: ["{name}은(는) 무리하게 활동하다가 발목을 삐끗했다.", "{name}은(는) 계속해서 움직이다가 기력을 모두 소진했다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 나란히 누워서 쉬기만 한다.", "{name}와(과) {partner}은(는) 서로에게 심부름을 미루며 가벼운 장난을 친다."],
+                        fail: ["{name}와(과) {partner}은(는) 식사를 미루다 몹시 허기를 느꼈다.", "{name}와(과) {partner}은(는) 늦게까지 아무것도 하지 않아 텐트 설치가 늦어졌다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 함께 장작을 패며 에너지를 발산한다.", "{name}와(과) {partner}은(는) 산책로를 걸으며 활기찬 시간을 보낸다."],
+                        fail: ["{name}와(과) {partner}은(는) 서로 경쟁하듯 일하다가 지쳐버렸다.", "{name}와(과) {partner}은(는) 너무 멀리 산책을 나갔다가 길을 잃을 뻔했다."]
+                    },
+                    diff: {
+                        success: ["{name}은(는) 휴식을 취하고, {partner}은(는) 혼자 바쁘게 움직이며 서로 만족해한다.", "{name}이(가) 가만히 쉬고 있자 {partner}이(가) 간식을 가져다준다."],
+                        fail: ["{name}이(가) 움직이지 않자 {partner}이(가) 서운함을 내비쳤다.", "{name}의 느긋한 태도를 보며 {partner}이(가) 답답해한다."]
+                    }
+                }
+            },
+            bug: { text: '벌레를 싫어한다', icon: 'fa-spider', room: 'forest',
+                success: {
+                    yes: ["{name}은(는) 모기향을 피워 벌레에 철저히 대비했다.", "{name}은(는) 날아오는 {bug}을(를) 도구를 이용해 잡았다."],
+                    no: ["{name}은(는) {bug}을(를) 조심스럽게 잡아 멀리 보내준다.", "{name}은(는) {bug}의 생김새를 관찰하며 흥미를 느낀다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 텐트에 들어온 {bug} 때문에 크게 놀라 뛰쳐나왔다.", "{name}은(는) {bug}이(가) 옷에 붙자 굳어버렸다."],
+                    no: ["{name}은(는) {bug}을(를) 쫓으려다 물건을 넘어뜨릴 뻔했다.", "{name}은(는) 익숙하지 않은 곤충을 건드렸다가 가벼운 상처를 입었다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 서로에게 벌레가 접근하지 않도록 도와주었다.", "{name}와(과) {partner}은(는) 모기장을 완벽하게 설치하고 안심했다."],
+                        fail: ["{name}와(과) {partner}은(는) 나방 한 마리에 크게 놀라 소란을 피웠다.", "{name}와(과) {partner}은(는) 벌레를 피해 차량 안으로 피신했다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 숲속 생물들을 찾아다니며 관찰한다.", "{name}와(과) {partner}은(는) 곤충을 발견하고 매우 기뻐한다."],
+                        fail: ["{name}와(과) {partner}은(는) 벌집 근처에 다가갔다가 황급히 물러났다.", "{name}와(과) {partner}은(는) 위험할 수 있는 곤충을 만지려다 서로 말렸다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 두려워하자 {partner}이(가) 침착하게 벌레를 밖으로 내보내 주었다.", "{name}은(는) {partner}의 도움으로 안정을 찾았다."],
+                        fail: ["{name}이(가) 무서워하는데 {partner}이(가) 벌레로 장난을 쳤다.", "{name}은(는) {partner}이(가) 관찰하던 곤충을 보고 무척 놀랐다."]
+                    }
+                }
+            },
+            night: { text: '밤늦게까지 논다', icon: 'fa-moon', room: 'fire',
+                success: {
+                    yes: ["{name}은(는) 고요한 새벽하늘의 별을 보며 감성에 젖는다.", "{name}은(는) 밤이 깊도록 타닥거리는 모닥불 소리를 즐긴다."],
+                    no: ["{name}은(는) 일찍 잠자리에 들어 상쾌한 아침을 준비한다.", "{name}은(는) 따뜻한 침낭 속에서 깊은 잠에 빠졌다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 밤늦게까지 깨어 있다가 다음 날 심하게 피곤해했다.", "{name}은(는) 어두운 곳에서 발을 헛디뎌 가볍게 넘어졌다."],
+                    no: ["{name}은(는) 일찍 자려다 주변 소음에 잠을 설친다.", "{name}은(는) 잠이 오지 않아 한참 동안 뒤척였다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 밤새 깊은 대화를 나눈다.", "{name}와(과) {partner}은(는) 달빛 아래서 따뜻한 간식을 먹으며 즐거워했다."],
+                        fail: ["{name}와(과) {partner}은(는) 목소리가 커져 주변 사람들에게 불편함을 주었다.", "{name}와(과) {partner}은(는) 늦잠을 자서 다음 날 일정이 지연되었다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 해가 지자마자 조용히 휴식을 취한다.", "{name}와(과) {partner}은(는) 고요한 텐트 안에서 평온한 시간을 보낸다."],
+                        fail: ["{name}와(과) {partner}은(는) 일찍 누웠으나 쉽게 잠들지 못해 어색한 시간을 보냈다.", "{name}와(과) {partner}은(는) 주변 소리 때문에 원치 않게 밤을 지새웠다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) {partner}의 수면을 방해하지 않으려 조용히 밖에서 시간을 보냈다.", "{name}이(가) 먼저 잠든 {partner}에게 담요를 덮어주었다."],
+                        fail: ["{name}은(는) 더 깨어 있기를 원하고, {partner}은(는) 피곤해하며 의견이 엇갈렸다.", "{name}이(가) 움직이는 소리에 {partner}이(가) 잠에서 깨어 예민해졌다."]
+                    }
+                }
+            },
+            music: { text: '음악을 사랑한다', icon: 'fa-music', room: 'fire',
+                success: {
+                    yes: ["{name}은(는) 분위기에 잘 어울리는 음악을 틀어 감동을 준다.", "{name}은(는) 가벼운 연주로 낭만적인 분위기를 연출한다."],
+                    no: ["{name}은(는) 자연의 소리에 귀를 기울이며 평온함을 느낀다.", "{name}은(는) 계곡 물소리를 배경 삼아 휴식한다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 음악 소리를 너무 키워 주변의 주의를 받았다.", "{name}은(는) 슬픈 노래를 듣다가 잠시 우울한 기분에 빠졌다."],
+                    no: ["{name}은(는) 적막함을 견디지 못하고 혼잣말을 중얼거린다.", "{name}은(는) 이웃의 음악 소리가 거슬려 귀를 막는다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 좋아하는 노래를 함께 들으며 즐거워한다.", "{name}와(과) {partner}은(는) 서로에게 음악을 추천하며 교감한다."],
+                        fail: ["{name}와(과) {partner}은(는) 선호하는 음악 장르가 달라 가볍게 다투었다.", "{name}와(과) {partner}의 노랫소리가 주변 사람들의 휴식을 방해했다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 말없이 타닥거리는 장작 소리에 집중한다.", "{name}와(과) {partner}은(는) 조용히 각자의 시간을 보낸다."],
+                        fail: ["{name}와(과) {partner}은(는) 너무 조용한 분위기에 약간의 어색함을 느꼈다.", "{name}와(과) {partner}은(는) 지루함을 느끼고 조용히 하품을 했다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 틀어둔 음악에 {partner}도 어느새 익숙해졌다.", "{name}이(가) {partner}을(를) 위해 잔잔한 곡을 재생했다."],
+                        fail: ["{name}이(가) 음악을 틀자 {partner}이(가) 소리를 줄여달라고 요청했다.", "{name}은(는) 음악에 빠져 있고 {partner}은(는) 소음을 피해 귀마개를 꼈다."]
+                    }
+                }
+            },
+            photo: { text: '사진 찍길 즐긴다', icon: 'fa-camera', room: 'forest',
+                success: {
+                    yes: ["{name}은(는) {plant} 사이로 비치는 햇살을 아름답게 사진에 담았다.", "{name}은(는) 멋진 사진을 기록으로 남길 생각에 즐거워한다."],
+                    no: ["{name}은(는) 눈으로 풍경을 담으며 그 순간에 집중한다.", "{name}은(는) 기기를 내려놓고 온전히 자연을 느낀다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 사진을 찍다 발을 헛디뎌 넘어질 뻔했다.", "{name}은(는) 역광을 고려하지 않아 사진이 어둡게 나왔다."],
+                    no: ["{name}은(는) 남는 건 사진뿐이라는 사실을 뒤늦게 깨닫고 아쉬워한다.", "{name}은(는) 아름다운 풍경을 보고도 카메라가 없어 눈으로만 담았다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 서로의 멋진 모습을 사진으로 남겨주었다.", "{name}와(과) {partner}은(는) 타이머를 설정해두고 다정한 포즈를 취했다."],
+                        fail: ["{name}와(과) {partner}은(는) 좋은 사진을 위해 무리하게 움직이다가 지쳤다.", "{name}와(과) {partner}은(는) 찍힌 사진이 마음에 들지 않아 서로 아쉬워했다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 풍경을 바라보며 조용히 산책한다.", "{name}와(과) {partner}은(는) 사진을 찍는 대신 서로의 대화에 집중하기로 한다."],
+                        fail: ["{name}와(과) {partner}은(는) 여행 후 남은 사진이 없어 허전함을 느꼈다.", "{name}와(과) {partner}은(는) 멋진 풍경을 눈앞에 두고도 별다른 반응이 없었다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) {partner}의 자연스러운 모습을 조용히 촬영해주었다.", "{name}의 열정에 {partner}도 기꺼이 모델이 되어주었다."],
+                        fail: ["{name}이(가) 계속 사진을 찍기 위해 멈춰 서자 {partner}이(가) 기다리다 지쳤다.", "{name}은(는) {partner}의 잦은 촬영 요청에 피로감을 느꼈다."]
+                    }
+                }
+            },
+            muscle: { text: '힘 쓰는 일을 잘한다', icon: 'fa-dumbbell', room: 'tent',
+                success: {
+                    yes: ["{name}은(는) 무거운 짐을 수월하게 옮겨 감탄을 자아낸다.", "{name}은(는) 단단한 땅에 텐트 팩을 단번에 고정한다."],
+                    no: ["{name}은(는) 도구를 활용하여 똑똑하게 짐을 옮긴다.", "{name}은(는) 무리하지 않고 천천히 주변을 정리했다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 힘 조절에 실패해 장비 일부를 손상시켰다.", "{name}은(는) 팩을 너무 깊게 박아 다시 뺄 때 고생했다."],
+                    no: ["{name}은(는) 무거운 {gear}을(를) 옮기려다 허리에 무리가 갔다.", "{name}은(는) 팩이 잘 고정되지 않아 애를 먹고 있다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 순식간에 필요한 설치를 마무리했다.", "{name}와(과) {partner}은(는) 방해되는 무거운 돌을 협동해서 치웠다."],
+                        fail: ["{name}와(과) {partner}은(는) 서로 무리하게 힘을 쓰다가 장비에 손상을 주었다.", "{name}와(과) {partner}은(는) 텐트 폴대를 너무 세게 당겨 휘어지게 만들었다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 가벼운 짐부터 차근차근 정리한다.", "{name}와(과) {partner}은(는) 서로 도와가며 천천히 준비를 마친다."],
+                        fail: ["{name}와(과) {partner}은(는) 무거운 짐 앞에서 막막함을 느꼈다.", "{name}와(과) {partner}은(는) 힘든 설치 작업에 지쳐 금방 쉬고 싶어졌다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 힘쓰는 일을 도맡고, {partner}은(는) 꼼꼼하게 물건들을 정리했다.", "{name}이(가) 텐트를 설치하는 동안 {partner}은(는) 식사 준비를 도왔다."],
+                        fail: ["{name}이(가) 혼자 무거운 짐을 옮기는데 {partner}이(가) 지켜보기만 하여 서운함이 생겼다.", "{name}이(가) 힘들어하자 {partner}이(가) 요령이 부족하다며 불만을 표시했다."]
+                    }
+                }
+            },
+            scared: { text: '겁이 많다', icon: 'fa-ghost', room: 'forest',
+                success: {
+                    yes: ["{name}은(는) 안전한 텐트 안에서 깊은 안도감을 느낀다.", "{name}은(는) 해가 지기 전 일찍 랜턴을 켜서 주변을 밝게 만들었다."],
+                    no: ["{name}은(는) 어두운 숲길을 작은 손전등 하나로 여유롭게 산책한다.", "{name}은(는) 숲에서 들리는 바스락 소리에도 침착함을 유지한다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 산짐승 소리에 크게 놀라 모두의 시선을 끌었다.", "{name}은(는) 바람에 흔들리는 그림자를 두려운 존재로 착각했다."],
+                    no: ["{name}은(는) 너무 방심하여 어둠 속에서 방향을 잃을 뻔했다.", "{name}은(는) 깊은 숲까지 들어갔다가 야생동물의 흔적을 보고 긴장했다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 어두운 곳을 지날 때 서로 동행하며 안심했다.", "{name}와(과) {partner}은(는) 무서운 이야기를 피하고 밝은 대화를 나눴다."],
+                        fail: ["{name}와(과) {partner}은(는) 갑작스러운 소음에 놀라 서로 부딪혔다.", "{name}와(과) {partner}은(는) 밤길이 두려워 필요한 이동을 미루다 불편을 겪었다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 담력 훈련을 하듯 밤 산책을 즐긴다.", "{name}와(과) {partner}은(는) 밤 숲의 고요한 정취를 느끼며 걷는다."],
+                        fail: ["{name}와(과) {partner}은(는) 너무 깊은 숲까지 들어갔다가 길을 찾느라 헤맸다.", "{name}와(과) {partner}은(는) 야생동물과 마주쳐 황급히 자리를 피했다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 두려워하자 {partner}이(가) 든든하게 동행해주었다.", "{name}은(는) {partner}에게 의지하며 이동했다."],
+                        fail: ["{name}이(가) 무서워하는데 {partner}이(가) 장난을 쳐서 분위기가 나빠졌다.", "{name}이(가) 놀라 내는 소리에 {partner}까지 덩달아 긴장했다."]
+                    }
+                }
+            },
+            cold: { text: '추위를 많이 탄다', icon: 'fa-snowflake', room: 'fire',
+                success: {
+                    yes: ["{name}은(는) 따뜻한 옷차림으로 무장하고 체온을 유지한다.", "{name}은(는) 모닥불 가까이 자리 잡아 온기를 즐긴다."],
+                    no: ["{name}은(는) 시원한 밤공기가 상쾌하다며 옷차림을 가볍게 한다.", "{name}은(는) 찬물로 손을 씻으며 정신을 맑게 한다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 추위에 몸을 떨다 들고 있던 음료를 흘렸다.", "{name}은(는) 따뜻한 침낭 밖으로 좀처럼 나오지 못한다."],
+                    no: ["{name}은(는) 얇은 옷차림으로 시간을 보내다 감기 기운을 느꼈다.", "{name}은(는) 쌀쌀한 날씨를 무시하다가 연거푸 재채기를 한다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 서로 따뜻한 담요를 챙겨주며 온기를 나눈다.", "{name}와(과) {partner}은(는) 따뜻한 음료를 나눠 마시며 추위를 달랬다."],
+                        fail: ["{name}와(과) {partner}은(는) 모닥불 앞에서 떠날 줄을 몰라 등 뒤가 서늘해졌다.", "{name}와(과) {partner}은(는) 남은 보온 용품을 두고 작은 마찰을 빚었다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 선선한 바람을 맞으며 상쾌함을 느낀다.", "{name}와(과) {partner}은(는) 차가운 계곡물에 발을 담그며 더위를 식힌다."],
+                        fail: ["{name}와(과) {partner}은(는) 추위를 잊고 활동하다가 심한 감기에 걸릴 뻔했다.", "{name}와(과) {partner}은(는) 차가운 밤이슬을 맞으며 늦게까지 머물러 피로를 느꼈다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 춥다고 하자 {partner}이(가) 흔쾌히 겉옷을 양보한다.", "{name}은(는) 두꺼운 옷을 입고 {partner}은(는) 얇은 옷을 입은 모습이 대조적이다."],
+                        fail: ["{name}은(는) 난로를 켜길 원하고, {partner}은(는) 답답하다며 끄길 원해 의견이 갈렸다.", "{name}이(가) 몸을 웅크리는데 {partner}은(는) 시원하다며 배려하지 못했다."]
+                    }
+                }
+            },
+             plan: { text: '계획적이다', icon: 'fa-list-ol', room: 'tent',
+                success: {
+                    yes: ["{name}은(는) 정해둔 일정대로 차분하게 하루를 보낸다.", "{name}은(는) 미리 준비한 물품 덕분에 예기치 않은 상황을 잘 넘겼다."],
+                    no: ["{name}은(는) 발길 닿는 대로 산책하다 아름다운 장소를 우연히 발견했다.", "{name}은(는) 구체적인 계획 없이 여유로운 시간을 온전히 즐긴다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 일정이 틀어지자 적잖은 스트레스를 받는다.", "{name}은(는) 너무 세세한 일정표에 스스로 피로감을 느꼈다."],
+                    no: ["{name}은(는) 중요한 필수품을 두고 온 사실을 뒤늦게 깨달았다.", "{name}은(는) 식사 준비 타이밍을 놓쳐 배고파한다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 체계적인 역할 분담으로 준비를 마쳤다.", "{name}와(과) {partner}은(는) 다음 날의 일정에 대해 진지하게 논의한다."],
+                        fail: ["{name}와(과) {partner}은(는) 서로의 계획이 어긋나 갈등을 겪었다.", "{name}와(과) {partner}은(는) 일정 소화에 급급해 주변의 풍경을 감상하지 못했다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 상황에 따라 유연하게 대처하며 여유를 부린다.", "{name}와(과) {partner}은(는) 즉흥적으로 계획을 변경하고 그 상황을 즐긴다."],
+                        fail: ["{name}와(과) {partner}은(는) 텐트 부품을 챙기지 않은 것을 알고 당황했다.", "{name}와(과) {partner}은(는) 무작정 걷다가 길을 잃어 시간을 허비했다."]
+                    },
+                    diff: {
+                        success: ["{name}은(는) {partner}이(가) 꼼꼼하게 챙겨온 준비물 덕분에 편안하게 지낸다.", "{name}이(가) 일정을 세우고 {partner}은(는) 그에 맞춰 여유롭게 움직였다."],
+                        fail: ["{name}이(가) 짜온 세부 계획을 {partner}이(가) 부담스러워한다.", "{name}이(가) 여유를 부리자 {partner}이(가) 일정이 늦어진다며 조급해했다."]
+                    }
+                }
+            },
+            talk: { text: '수다를 좋아한다', icon: 'fa-comments', room: 'fire',
+                success: {
+                    yes: ["{name}의 즐거운 이야기에 모두의 얼굴에 웃음꽃이 핀다.", "{name}은(는) 활발하게 대화를 주도하며 분위기를 밝게 만든다."],
+                    no: ["{name}은(는) 조용히 타오르는 불꽃을 보며 사색에 잠긴다.", "{name}은(는) 말보다는 행동으로 묵묵히 일행을 챙긴다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 지나치게 많은 말을 하여 분위기를 어색하게 만들었다.", "{name}은(는) 쉴 새 없이 이야기하다가 목이 쉬어버렸다."],
+                    no: ["{name}은(는) 너무 말이 없어 일행에게 오해를 살 뻔했다.", "{name}은(는) 대화의 흐름에 자연스럽게 끼어들지 못하고 머뭇거린다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}의 유쾌한 웃음소리가 주변에 울려 퍼진다.", "{name}와(과) {partner}은(는) 밤새도록 즐거운 대화를 이어간다."],
+                        fail: ["{name}와(과) {partner}은(는) 서로 자신의 이야기만 하느라 대화가 겉돌았다.", "{name}와(과) {partner}은(는) 대화 소리가 커져 이웃 사이트의 눈총을 받았다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 눈빛만으로도 서로의 마음을 이해한다.", "{name}와(과) {partner}은(는) 각자의 시간을 존중하며 편안한 침묵을 즐긴다."],
+                        fail: ["{name}와(과) {partner}은(는) 할 말이 없어 조용히 불만 바라보았다.", "{name}와(과) {partner}은(는) 대화가 끊겨 각자 기기만 쳐다보는 어색한 시간을 보냈다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 재미있는 이야기를 꺼내자 {partner}이(가) 귀 기울여 들었다.", "{name}의 밝은 이야기에 {partner}이(가) 미소로 화답했다."],
+                        fail: ["{name}이(가) 계속 말을 걸어도 {partner}은(는) 건성으로 대답했다.", "{name}의 끊임없는 이야기에 피로를 느낀 {partner}이(가) 잠시 자리를 피했다."]
+                    }
+                }
+            },
+            drink: { text: '술을 즐긴다', icon: 'fa-wine-bottle', room: 'cook',
+                success: {
+                    yes: ["{name}은(는) 시원한 음료 한 잔으로 갈증을 해소한다.", "{name}은(는) 직접 제조한 특별한 음료를 선보여 호응을 얻는다."],
+                    no: ["{name}은(는) 따뜻한 차를 마시며 차분히 몸을 녹인다.", "{name}은(는) 가벼운 음료만으로도 충분히 분위기를 즐긴다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) 취기가 올라 걸음걸이가 잠시 비틀거렸다.", "{name}은(는) 취기에 부적절한 이야기를 꺼내 분위기를 가라앉게 했다."],
+                    no: ["{name}은(는) 음주 문화에 익숙하지 않아 약간 당황해한다.", "{name}은(는) 취한 일행들을 챙기느라 조용히 고생한다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) 잔을 부딪치며 즐거운 시간을 보낸다.", "{name}와(과) {partner}은(는) 함께 마실 곁들임 음식을 정성껏 준비한다."],
+                        fail: ["{name}와(과) {partner}은(는) 취기가 올라 같은 말을 여러 번 반복했다.", "{name}와(과) {partner}은(는) 술김에 서운했던 점을 말하다가 가벼운 말다툼을 했다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 차와 커피를 마시며 담백한 밤을 보낸다.", "{name}와(과) {partner}은(는) 맑은 정신으로 밤하늘의 별자리를 관측한다."],
+                        fail: ["{name}와(과) {partner}은(는) 차분한 분위기에 금세 피로를 느껴 일찍 잠자리에 들었다.", "{name}와(과) {partner}은(는) 분위기가 다소 가라앉았다며 아쉬워했다."]
+                    },
+                    diff: {
+                        success: ["{name}은(는) 적당히 취기를 즐기고 {partner}은(는) 주변 정리를 도맡는다.", "{name}이(가) 권하는 잔을 {partner}이(가) 정중히 거절하고 다른 음료를 즐겼다."],
+                        fail: ["{name}이(가) 무리하게 잔을 권해 {partner}이(가) 부담스러워했다.", "{name}이(가) 술에 취해 실수하여 {partner}이(가) 수습하느라 고생했다."]
+                    }
+                }
+            },
+            nature: { text: '동식물을 아낀다', icon: 'fa-leaf', room: 'forest',
+                success: {
+                    yes: ["{name}은(는) 주변 쓰레기를 주우며 자연 보호를 실천한다.", "{name}은(는) 곤경에 처한 {animal}을(를) 발견하고 조심스레 도왔다."],
+                    no: ["{name}은(는) 바닥에 떨어진 나뭇가지를 주워 유용하게 활용한다.", "{name}은(는) 자연을 훼손하지 않고 텐트 칠 자리를 잘 잡았다."]
+                },
+                fail: {
+                    yes: ["{name}은(는) {animal}에게 다가가려다 오히려 놀라게 만들었다.", "{name}은(는) 예쁜 식물을 밟지 않으려다 균형을 잃고 비틀거렸다."],
+                    no: ["{name}은(는) 무심코 살아있는 나뭇가지를 꺾어 주의를 받았다.", "{name}은(는) 쓰레기를 부주의하게 처리하려다 일행에게 제지당했다."]
+                },
+                duo: {
+                    same_yes: {
+                        success: ["{name}와(과) {partner}은(는) {plant}을(를) 관찰하며 자연에 대해 이야기를 나눈다.", "{name}와(과) {partner}은(는) 새소리를 들으며 평온한 시간을 즐긴다."],
+                        fail: ["{name}와(과) {partner}은(는) {animal}의 흔적을 쫓아가다 방향 감각을 잃었다.", "{name}와(과) {partner}은(는) 익숙하지 않은 풀에 스쳐 피부가 따가워 고생했다."]
+                    },
+                    same_no: {
+                        success: ["{name}와(과) {partner}은(는) 덤덤하게 숲길의 정취를 느끼며 걷는다.", "{name}와(과) {partner}은(는) 자연 풍경보다는 장비와 시설에 더 관심을 둔다."],
+                        fail: ["{name}와(과) {partner}은(는) 정리를 소홀히 하다가 쓰레기가 바람에 날아갔다.", "{name}와(과) {partner}은(는) 곤충 서식지를 건드려 황급히 자리를 피했다."]
+                    },
+                    diff: {
+                        success: ["{name}이(가) 주변 식물을 설명해주자 {partner}이(가) 흥미롭게 듣는다.", "{name}은(는) 쓰레기를 줍고 {partner}은(는) 이를 담을 봉투를 들어주었다."],
+                        fail: ["{name}이(가) 자연 보호의 중요성을 강조하자 {partner}이(가) 다소 지루해했다.", "{name}이(가) 벌레를 무리하게 잡으려 하자 {partner}이(가) 만류했다."]
+                    }
+                }
+            }
+        };
+
+        const GENERAL_SCRIPTS_SOLO = [
+            "{name}은(는) 타닥거리는 모닥불 소리에 조용히 귀를 기울인다.",
+            "{name}이(가) 하늘을 올려다보니 수많은 별이 선명하게 빛난다.",
+            "{name}은(는) 깊게 숨을 들이마시며 숲의 상쾌한 공기를 느낀다.",
+            "{name}이(가) {snack}을(를) 꺼내 먹으며 평온한 미소를 짓는다.",
+            "{name}은(는) 바람에 흔들리는 나뭇잎을 가만히 바라본다.",
+            "{name}이(가) 캠핑 의자에 기대어 잠시 눈을 감고 휴식한다.",
+            "{name}은(는) 멀리서 들려오는 계곡 물소리에 마음이 차분해진다.",
+            "{name}이(가) 신발 끈을 고쳐 매며 가벼운 산책을 준비한다.",
+            "{name}은(는) 따뜻한 음료의 향기를 천천히 음미한다.",
+            "{name}이(가) 텐트 주변을 정리하며 주변 환경을 살핀다.",
+            "{name}은(는) 길가에서 예쁜 {plant}을(를) 발견하고 관찰한다.",
+            "{name}이(가) 밤하늘을 가로지르는 비행기의 불빛을 발견한다.",
+            
+            "{name}은(는) 아침 이슬이 맺힌 {plant}을(를) 가만히 들여다본다.",
+            "{name}이(가) 시원하게 불어오는 산들바람에 땀을 식힌다.",
+            "{name}은(는) 붉게 물들어가는 저녁 노을을 보며 감상에 젖는다.",
+            "{name}이(가) 텐트 위로 떨어지는 타닥타닥 빗방울 소리를 감상한다.",
+            "{name}은(는) 맑은 계곡물에 손을 담그고 차가움을 느낀다.",
+            "{name}이(가) 쏟아지는 아침 햇살을 받으며 기지개를 크게 켠다.",
+            "{name}은(는) 숲속을 가득 채우는 이름 모를 산새 소리에 귀를 기울인다.",
+            "{name}이(가) 안개가 자욱하게 낀 아침 캠핑장의 운치를 즐긴다.",
+            "{name}은(는) 뭉게구름 사이로 얼굴을 내민 달빛을 멍하니 바라본다.",
+            "{name}이(가) 코끝을 스치는 짙은 흙내음에 입가에 미소를 띤다.",
+            "{name}은(는) 발밑에서 바스락거리는 {plant} 밟는 소리를 즐긴다.",
+            "{name}이(가) 멀리서 들려오는 부엉이 울음소리에 귀를 쫑긋 세운다.",
+            "{name}은(는) 해먹에 누워 나뭇가지 사이로 비치는 햇살을 눈에 담는다.",
+
+            "{name}이(가) 따스한 햇볕을 쬐며 해먹 위에서 꾸벅꾸벅 졸고 있다.",
+            "{name}은(는) 고요한 자연 속에서 오롯이 혼자만의 사색에 잠긴다.",
+            "{name}이(가) 산등성이를 넘어오는 시원한 바람을 두 팔 벌려 맞이한다.",
+            "{name}은(는) 별이 쏟아질 듯한 밤하늘을 보며 마음속으로 소원을 빈다.",
+            "{name}이(가) 뺨에 닿는 차가운 밤공기에 두꺼운 옷깃을 여민다.",
+            "{name}은(는) 바쁘게 움직이는 작은 {bug}을(를) 호기심 있게 지켜본다.",
+            "{name}이(가) 텐트 주변을 기웃거리는 {animal}와(과) 우연히 눈이 마주친다.",
+            "{name}은(는) 발가락을 간지럽히는 {plant}을(를) 피해 조심스레 걷는다.",
+            "{name}이(가) 어둠 속을 수놓는 반딧불이의 신비로운 춤사위를 구경한다.",
+            "{name}은(는) 잽싸게 나무 기둥을 타고 오르는 {animal}을(를) 발견한다.",
+            "{name}이(가) 예쁘게 피어난 {plant} 주변을 맴도는 나비를 쫓아 시선을 돌린다.",
+            "{name}은(는) 어디선가 윙윙거리며 나타난 {bug}을(를) 부채질로 쫓아낸다.",
+            "{name}이(가) 바스락 소리를 내며 수풀 사이로 몸을 숨기는 {animal}을(를) 봅니다.",
+            "{name}은(는) 돗자리 위로 떨어진 {plant}을(를) 주워 이리저리 만지작거린다.",
+            "{name}이(가) 랜턴 불빛을 보고 날아온 {bug}을(를) 멍하니 쳐다본다.",
+            "{name}은(는) 맑은 물가에서 이리저리 헤엄치는 작은 송사리 떼를 구경한다.",
+            "{name}이(가) 바위 밑에 숨어있는 {bug}을(를) 우연히 발견하고 신기해한다.",
+            "{name}은(는) 축축한 흙바닥에 남겨진 작은 {animal}의 발자국을 따라가 본다.",
+            "{name}이(가) 자꾸만 코끝에 앉으려는 {bug}을(를) 손짓으로 내쫓는다.",
+            "{name}은(는) 양지바른 곳에서 햇볕을 쬐는 {animal}을(를) 방해하지 않으려 조심한다.",
+            "{name}이(가) 이슬을 머금어 반짝이는 {plant}을(를) 카메라 렌즈에 조심스레 담는다.",
+            "{name}은(는) 텐트 틈새로 잘못 들어온 작은 {bug}을(를) 밖으로 살려보낸다.",
+            "{name}이(가) 길가에 소복하게 쌓인 {plant}을(를) 발끝으로 툭툭 건드려본다.",
+            "{name}은(는) 먹이를 찾으러 텐트 근처로 내려온 {animal}에게 조용히 눈인사를 건넨다.",
+            "{name}이(가) 풀숲에서 일정하게 우는 귀뚜라미 소리를 자장가 삼아 휴식한다.",
+
+            "{name}은(는) 코펠 안에서 김이 모락모락 나는 {food}을(를) 바라본다.",
+            "{name}이(가) {snack}을(를) 입에 쏙 넣고 세상을 다 가진 듯 행복해한다.",
+            "{name}은(는) 정성스럽게 {food}을(를) 요리하며 캠핑에서 빠질 수 없는 식도락을 느낀다.",
+            "{name}이(가) 커피 드리퍼로 따뜻한 커피 한 잔을 내리며 은은한 원두 향을 즐긴다.",
+            "{name}은(는) 화로대 위에서 노릇노릇하게 구워지는 음식을 집게로 뒤집는다.",
+            "{name}이(가) 챙겨온 {snack}을(를) 먹으며 신나는 간식 시간을 즐긴다.",
+            "{name}은(는) 아이스박스에서 꺼낸 시원한 음료를 마시며 갈증을 달랜다.",
+            "{name}이(가) {food}을(를) 한 입 맛보고는 만족스럽게 고개를 끄덕인다.",
+            "{name}은(는) 긴 나뭇가지에 꽂아 모닥불에 구운 마시멜로를 호호 불어먹는다.",
+            "{name}이(가) 캠핑의 꽃이라 불리는 {food}을(를) 먹을 준비를 하며 한껏 신나한다.",
+            "{name}은(는) 일행과 사이좋게 나눠 먹을 {snack}을(를) 나무 도마 위에 예쁘게 세팅한다.",
+            "{name}이(가) 코펠에서 갓 지어진 고소한 밥 냄새를 맡으며 배고픔을 달랜다.",
+            "{name}은(는) 애매하게 남은 {food} 재료를 보며 다음 끼니로 무엇을 만들지 고민한다.",
+            "{name}이(가) 얼음이 가득한 워터저그에서 시원한 물을 한 컵 가득 따라 마신다.",
+            "{name}은(는) {snack}을(를) 씹으며 여유롭게 스마트폰으로 영상을 본다.",
+            "{name}이(가) 버너 위에 올린 찌개가 보글보글 끓기를 기다리며 불 조절을 세심하게 한다.",
+            "{name}은(는) 은박지에 싸서 장작불에 구운 고구마를 반으로 쪼개며 작게 환호성을 지른다.",
+            "{name}이(가) 이웃 텐트에서 풍겨오는 맛있는 {food} 냄새에 슬며시 기웃거린다.",
+            "{name}은(는) 서늘한 공기 속에서 다 식어버린 차를 마시면서도 나름의 운치를 느낀다.",
+            "{name}이(가) 든든한 식사를 마친 후 빈 그릇들을 정리하며 부른 배를 통통 두드린다.",
+            "{name}은(는) 새로 장만한 {gear}의 성능을 이리저리 테스트해 보며 무척 흡족해한다.",
+            "{name}이(가) 삐그덕거리는 캠핑 의자의 이음새를 확인하고 나사를 단단히 고정한다.",
+            "{name}은(는) 사방이 어두워지기 전에 서둘러 랜턴과 {gear}을(를) 미리 세팅해 둔다.",
+            "{name}이(가) 엉망으로 꼬여버린 텐트 스트링을 하나하나 풀며 인내심의 한계를 시험한다.",
+            "{name}은(는) 푹신하고 포근한 침낭 속에 쏙 들어가 발가락을 꼼지락거린다.",
+
+            "{name}이(가) 가스 랜턴의 다이얼을 돌려 밝기를 조절하며 캠핑장의 분위기를 잡는다.",
+            "{name}은(는) 해먹에 편안하게 누워 파란 하늘을 멍하니 바라보며 {activity}을(를) 한다.",
+            "{name}이(가) 주변의 소음을 차단하고 조용히 {activity}에 집중하며 머릿속 잡념을 지운다.",
+            "{name}은(는) 전자기기를 잠시 내려놓고 자연 속에서 온전히 {activity}을(를) 즐겨본다.",
+            "{name}이(가) 블루투스 스피커에서 잔잔하게 흘러나오는 어쿠스틱 노래를 흥얼거린다.",
+            "{name}은(는) 밤의 불멍을 위해 화로대 옆에 장작을 우물 정 모양으로 예쁘게 쌓아 올린다.",
+            "{name}이(가) 팩망치로 팩을 튼튼하게 박아 넣으며 바람에도 끄떡없게 텐트를 고정한다.",
+            "{name}은(는) 아끼는 {gear}에 묻은 진흙과 흙먼지를 물티슈로 꼼꼼하게 닦아낸다.",
+            "{name}이(가) 나른하고 여유로운 오후 시간, 그늘 밑에서 {activity}을(를) 하며 시간을 보낸다.",
+            "{name}은(는) 소화도 시킬 겸 캠핑장을 크게 한 바퀴 돌며 산책로를 가볍게 탐색한다.",
+            "{name}이(가) 카메라를 조심스레 꺼내 눈앞에 펼쳐진 아름다운 풍경을 렌즈에 담는다.",
+            "{name}은(는) 밤공기가 차가워지자 두꺼운 겉옷을 걸치고 모닥불 앞으로 바짝 다가간다.",
+            "{name}이(가) 산책로에서 마주친 옆 텐트 사람들과 가볍고 반갑게 눈인사를 나눈다.",
+            "{name}은(는) 복잡한 일상에서 벗어났다는 해방감에 숨을 크게 들이마시며 두 팔을 벌려본다.",
+            "{name}이(가) 시계도 보지 않고 아무것도 하지 않는 이 빈둥거리는 시간이 너무나 소중하게 느껴진다.",
+            "{name}은(는) 붉은 장작이 타들어가며 뿜어내는 훅훅한 열기에 꽁꽁 언 손을 녹인다.",
+            "{name}이(가) 쏟아지는 밤하늘의 별자리 중 북두칠성을 찾아내고는 아이처럼 손가락으로 가리킨다.",
+            "{name}은(는) 다이어리를 꺼내 장작 타는 소리를 브금 삼아 오늘의 캠핑 기록을 끄적거린다.",
+            "{name}이(가) 오래된 라디오에서 흘러나오는 추억의 노래를 들으며 잠시 옛 생각에 잠긴다.",
+            "{name}은(는) 아침 일찍 텐트 문을 지퍼로 열고 밖의 날씨를 확인하며 길게 하품을 한다.",
+            "{name}이(가) 풀벌레 우는 소리가 배경음악처럼 잔잔히 깔린 늦은 밤의 낭만을 온몸으로 즐긴다.",
+            "{name}은(는) 시원한 공기 덕분에 복잡했던 머릿속이 맑아지는 것을 느끼며 편안한 미소를 머금는다.",
+            "{name}이(가) 이글이글 타오르는 모닥불 불꽃의 일렁이는 모양을 그저 멍하니 관찰한다.",
+            "{name}은(는) 숲이 내뿜는 맑은 정기를 듬뿍 받아 몸과 마음이 깃털처럼 가벼워진 기분이다.",
+            "{name}이(가) 평화롭고 완벽했던 오늘 하루의 캠핑에 깊이 감사하며 포근한 잠자리에 든다."
+        ];
+
+        const GENERAL_SCRIPTS_DUO = [
+            "{name}와(과) {partner}은(는) 시원한 그늘 아래 나란히 캠핑 의자를 펴고 앉아 쉰다.",
+            "{name}이(가) 내린 커피를 {partner}와(과) 함께 마시며 여유로운 아침을 맞이한다.",
+            "{name}와(과) {partner}은(는) 텐트를 함께 정비하며 척척 호흡을 맞춘다.",
+            "{name}은(는) {partner}와(과) 함께 숲길을 걸으며 {animal}을(를) 찾아본다.",
+            "{name}와(과) {partner}은(는) 블루투스 스피커에서 나오는 노래를 가볍게 따라 부른다.",
+            "{name}이(가) 새로 챙겨온 {gear}을(를) {partner}에게 자랑하며 사용법을 알려준다.",
+            "{name}와(과) {partner}은(는) 어두워지기 전에 랜턴을 곳곳에 설치하며 밤을 준비한다.",
+            "{name}은(는) {partner}와(과) 함께 {activity}을(를) 하며 한가로운 오후를 즐긴다.",
+            "{name}와(과) {partner}은(는) 나란히 해먹에 누워 밤하늘의 별을 세며 감상에 젖는다.",
+            "{name}이(가) 끓인 라면에 {partner}이(가) 챙겨온 {snack}을(를) 곁들여 야식을 즐긴다.",
+            "{name}와(과) {partner}은(는) 타오르는 장작불을 보며 진지하고 깊은 대화를 나눈다.",
+            "{name}은(는) {partner}이(가) 요리하는 동안 옆에서 재료를 다듬으며 일손을 돕는다.",
+            "{name}와(과) {partner}은(는) 길을 잃은 작은 {bug}을(를) 조심스레 숲으로 돌려보낸다.",
+            "{name}이(가) 예쁜 {plant}을(를) 배경으로 {partner}의 사진을 정성껏 찍어준다.",
+            "{name}와(과) {partner}은(는) 캠핑장 주변을 천천히 산책하며 든든하게 채운 배를 소화시킨다.",
+            "{name}은(는) {partner}와(과) 마주 앉아 가벼운 카드 게임을 하며 웃음꽃을 피운다.",
+            "{name}와(과) {partner}은(는) 따뜻한 담요를 덮고 차가운 밤공기를 깊게 들이마신다.",
+            "{name}이(가) 튼튼한 장작을 패고 {partner}은(는) 알맞은 크기의 장작을 차곡차곡 쌓는다.",
+            "{name}와(과) {partner}은(는) 각자 가져온 {gear}을(를) 구경하며 유용한 캠핑 팁을 공유한다.",
+            "{name}은(는) {partner}의 어깨에 기댄 채 노을이 지는 낭만적인 풍경을 감상한다.",
+            "{name}와(과) {partner}은(는) 맑은 계곡물에 나란히 발을 담그고 더위를 식힌다.",
+            "{name}이(가) {snack}을(를) 먹다 흘리자 {partner}이(가) 웃으며 닦아준다.",
+            "{name}와(과) {partner}은(는) 돗자리에 누워 지나가는 구름 모양을 보며 수다를 떤다.",
+            "{name}은(는) {partner}와(과) 함께 {food} 재료를 손질하며 저녁 준비에 한창이다.",
+            "{name}와(과) {partner}은(는) 이웃 텐트에서 풍기는 {food} 냄새를 맡고 서로 마주 보며 군침을 삼킨다.",
+            "{name}이(가) 텐트 폴대를 꽉 잡고 있는 동안 {partner}이(가) 팩을 단단하게 박아 고정한다.",
+            "{name}와(과) {partner}은(는) 아침 일찍 일어나 상쾌한 공기를 마시며 크게 기지개를 켠다.",
+            "{name}은(는) {partner}와(과) 함께 {activity}을(를) 하기로 하고 한껏 기대감에 부푼다.",
+            "{name}와(과) {partner}은(는) 캠핑의 낭만은 역시 불멍이라며 화로대 앞으로 옹기종기 모인다.",
+            "{name}이(가) 무서운 이야기를 꺼내자 {partner}이(가) 등골이 서늘해진다며 헛웃음을 터뜨린다.",
+            "{name}와(과) {partner}은(는) 챙겨온 머그잔을 부딪치며 오늘 하루도 수고했다며 서로를 격려한다.",
+            "{name}이(가) 콧노래를 부르며 걷자 {partner}도 기분이 좋아져 발걸음을 가볍게 맞춘다."
+        ];
+
+        const REL_TIERS = [
+            { min: -100, label: '혐오', color: 'text-red-700 dark:text-red-400' },
+            { min: -69, label: '적대', color: 'text-red-500 dark:text-red-300' },
+            { min: -39, label: '경계', color: 'text-orange-500 dark:text-orange-300' },
+            { min: -9, label: '무관심', color: 'text-stone-400 dark:text-stone-500' },
+            { min: 10, label: '지인', color: 'text-green-600 dark:text-green-400' },
+            { min: 40, label: '친구', color: 'text-blue-500 dark:text-blue-400' },
+            { min: 70, label: '소울메이트', color: 'text-purple-600 dark:text-purple-400' }
+        ];
+
+        let state = {
+            day: 1,
+            characters: [],
+            logs: [],
+            isStarted: false,
+            isDark: false
+        };
+
+        const STORAGE_KEY = 'camping_sim_data';
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                toggleDarkMode(true);
+            }
+            document.getElementById('new-name').addEventListener('keyup', function(e) {
+                if (e.key === 'Enter') addCharacter();
+            });
+            renderTraitTable();
+            renderZones();
+            updateUI();
+        });
+
+        // --- Core Functions ---
+        function toggleDarkMode(forceDark = null) {
+            const body = document.body;
+            if (forceDark === true) {
+                body.classList.add('dark');
+                state.isDark = true;
+            } else if (forceDark === false) {
+                body.classList.remove('dark');
+                state.isDark = false;
+            } else {
+                body.classList.toggle('dark');
+                state.isDark = !state.isDark;
+            }
+        }
+
+        function toggleInfoModal() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        function addCharacter() {
+            const nameInput = document.getElementById('new-name');
+            const name = nameInput.value.trim();
+            if (!name) return showToast('이름을 입력해주세요.', 'error');
+            if (state.characters.some(c => c.name === name)) return showToast('이미 존재하는 이름입니다.', 'error');
+            if (state.characters.length >= 20) return showToast('최대 20명까지만 등록 가능합니다.', 'error');
+
+            const newChar = {
+                id: 'char_' + Date.now(),
+                name: name,
+                traits: {},
+                relationships: {},
+                location: null,
+                status: '대기 중'
+            };
+            Object.keys(TRAIT_DATA).forEach(k => newChar.traits[k] = null);
+            state.characters.push(newChar);
+            nameInput.value = '';
+            renderTraitTable();
+            updateUI();
+        }
+
+        function saveAndStart() {
+            if (state.characters.length < 1) return showToast('최소 1명의 캐릭터가 필요합니다.', 'error');
+            state.isStarted = true;
+            document.getElementById('btn-next-day').disabled = false;
+            updateUI();
+            showToast('설정이 저장되었습니다. 우측 하단의 재생 버튼을 눌러 시작하세요!', 'success');
+            switchTab('camp');
+        }
+
+        // --- Data Management Functions ---
+        function saveLocal() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                showToast('브라우저에 저장되었습니다.', 'success');
+            } catch(e) {
+                showToast('저장 실패: ' + e, 'error');
+            }
+        }
+
+        function loadLocal() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if(!data) return showToast('저장된 데이터가 없습니다.', 'error');
+            try {
+                const parsed = JSON.parse(data);
+                state = { ...state, ...parsed };
+                restoreUI();
+                showToast('데이터를 불러왔습니다.', 'success');
+            } catch(e) {
+                showToast('데이터 불러오기 실패: ' + e, 'error');
+            }
+        }
+
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "camping_save.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function exportRosterJSON() {
+            const rosterData = {
+                day: 1,
+                logs: [],
+                isStarted: false,
+                isDark: state.isDark,
+                characters: state.characters.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    traits: c.traits,
+                    relationships: {},
+                    location: null,
+                    status: '대기 중'
+                }))
+            };
+            
+            rosterData.characters.forEach(c1 => {
+                c1.relationships = {};
+                rosterData.characters.forEach(c2 => {
+                    if(c1.id !== c2.id) c1.relationships[c2.id] = 0;
+                });
+            });
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rosterData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "camping_roster_only.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function importJSON(input) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    state = { ...state, ...parsed };
+                    restoreUI();
+                    showToast('파일을 불러왔습니다.', 'success');
+                } catch(err) {
+                    showToast('올바르지 않은 파일입니다.', 'error');
+                }
+            };
+            reader.readAsText(file);
+            input.value = '';
+        }
+
+        function restartWithRoster() {
+            showConfirm("정말로 이 명부로 다시 시작하시겠습니까?<br>모든 진행 상황(관계, 일지)이 초기화됩니다.", () => {
+                state.day = 1;
+                state.logs = [];
+                state.isStarted = false;
+                
+                state.characters.forEach(c => {
+                    c.location = null;
+                    c.status = '대기 중';
+                    c.relationships = {};
+                });
+
+                restoreUI();
+                showToast('명부와 성향만 남기고 초기화했습니다.', 'success');
+            });
+        }
+
+        function clearData() {
+            showConfirm('정말 모든 데이터를 삭제하고 초기화하시겠습니까?', () => {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            });
+        }
+
+        function restoreUI() {
+            renderTraitTable();
+            renderZones();
+            
+            renderLogs();
+
+            document.getElementById('day-display').innerText = state.day;
+            updateUI(); 
+
+            if (state.isStarted) {
+                switchTab('camp');
+            } else {
+                switchTab('members');
+            }
+        }
+
+        function downloadTableImage() {
+            const originalTable = document.getElementById('trait-table');
+            
+            const cloneWrapper = document.createElement('div');
+            cloneWrapper.style.position = 'absolute';
+            cloneWrapper.style.top = '-9999px';
+            cloneWrapper.style.left = '-9999px';
+            cloneWrapper.style.width = 'fit-content';
+            cloneWrapper.style.padding = '40px';
+            cloneWrapper.style.zIndex = '9999';
+            
+            const borderColor = state.isDark ? '#475569' : '#e5e7eb';
+            const headerBg = state.isDark ? '#1e293b' : '#f8fafc';
+            
+            if(state.isDark) {
+                cloneWrapper.style.backgroundColor = '#0f172a';
+                cloneWrapper.style.color = '#e7e5e4';
+            } else {
+                cloneWrapper.style.backgroundColor = '#ffffff';
+                cloneWrapper.style.color = '#44403c';
+            }
+
+            const cloneTable = originalTable.cloneNode(true);
+            
+            cloneTable.className = '';
+            cloneTable.style.width = '100%';
+            cloneTable.style.borderCollapse = 'collapse';
+            cloneTable.style.borderSpacing = '0';
+            cloneTable.style.fontFamily = "'Noto Sans KR', sans-serif";
+
+            const rows = cloneTable.querySelectorAll('tr');
+            rows.forEach(tr => {
+                tr.className = '';
+                tr.style.background = 'transparent';
+            });
+
+            cloneTable.querySelectorAll('th, td').forEach(el => {
+                el.className = ''; 
+                el.style.position = 'static';
+                el.style.overflow = 'visible';
+                el.style.boxShadow = 'none';
+                el.style.background = 'transparent';
+                
+                el.style.border = 'none';
+                el.style.borderBottom = `1px solid ${borderColor}`;
+                
+                el.style.verticalAlign = 'middle';
+                el.style.padding = '8px 10px';
+                el.style.fontSize = '14px';
+            });
+
+            cloneTable.querySelectorAll('thead th').forEach(th => {
+                const nameSpan = th.querySelector('span');
+                let headerText = '';
+
+                if (nameSpan) {
+                    headerText = nameSpan.innerText.trim();
+                } else {
+                    headerText = th.innerText.trim();
+                }
+
+                th.innerHTML = `<div style="position:relative; top:-5px;">${headerText}</div>`;
+                th.style.backgroundColor = headerBg;
+                th.style.fontWeight = 'bold';
+                th.style.textAlign = 'center';
+                th.style.color = state.isDark ? '#e7e5e4' : '#44403c';
+                th.style.height = '40px';
+                
+                th.style.borderBottom = `2px solid ${borderColor}`;
+            });
+
+            cloneTable.querySelectorAll('tbody td').forEach(td => {
+                const btn = td.querySelector('button');
+                
+                if (btn) {
+                    const icon = btn.querySelector('i');
+                    const iconClass = icon ? icon.className : '';
+                    
+                    let text;
+                    if (btn.classList.contains('bg-green-100')) { 
+                        text = state.isDark ? '#4ade80' : '#16a34a'; 
+                    } else if (btn.classList.contains('bg-red-100')) { 
+                        text = state.isDark ? '#f87171' : '#dc2626';
+                    } else { 
+                        text = state.isDark ? '#94a3b8' : '#d6d3d1';
+                    }
+
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.justifyContent = 'center';
+                    div.style.width = '24px';
+                    div.style.height = '24px';
+                    div.style.margin = '0 auto';
+                    
+                    div.style.backgroundColor = 'transparent'; 
+                    div.style.border = 'none';
+                    div.style.color = text;
+                    
+                    div.style.position = 'relative';
+                    div.style.top = '-5px'; 
+                    
+                    div.innerHTML = `<i class="${iconClass}" style="font-size:14px;"></i>`; 
+                    
+                    td.innerHTML = '';
+                    td.appendChild(div);
+                    td.style.textAlign = 'center';
+                } 
+                else {
+                    const icon = td.querySelector('i');
+                    if (icon) {
+                        const text = td.innerText.trim();
+                        const iconClass = icon.className;
+                        const iconColor = state.isDark ? '#fbbf24' : '#f59e0b';
+                        
+                        td.innerHTML = `
+                            <div style="display:flex; align-items:center; gap:8px; height:100%; position:relative; top:-5px;">
+                                <i class="${iconClass}" style="color:${iconColor}; width:16px; text-align:center;"></i>
+                                <span>${text}</span>
+                            </div>
+                        `;
+                    }
+                    td.style.textAlign = 'left';
+                    td.style.fontWeight = '500';
+                    td.style.color = state.isDark ? '#e7e5e4' : '#44403c';
+                }
+            });
+
+            cloneWrapper.appendChild(cloneTable);
+            document.body.appendChild(cloneWrapper);
+
+            html2canvas(cloneWrapper, {
+                backgroundColor: state.isDark ? '#0f172a' : '#ffffff',
+                scale: 2
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `camping_traits_${Date.now()}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+                
+                document.body.removeChild(cloneWrapper);
+            });
+        }
+
+        // --- Logic: Simulation ---
+
+        function nextDay() {
+            if (!state.isStarted) return showToast('먼저 명단 탭에서 설정을 완료해주세요.', 'error');
+
+            const currentDay = state.day;
+            const dayLogs = [];
+            
+            const shuffled = [...state.characters].sort(() => Math.random() - 0.5);
+            const groups = [];
+            while(shuffled.length > 0) {
+                if (shuffled.length >= 2 && Math.random() > 0.3) {
+                    groups.push([shuffled.pop(), shuffled.pop()]);
+                } else {
+                    groups.push([shuffled.pop()]);
+                }
+            }
+
+            groups.forEach(group => {
+                const isDuo = group.length === 2;
+                let c1 = group[0];
+                let c2 = isDuo ? group[1] : null;
+
+                if (Math.random() < 0.3) {
+                    let template;
+                    if (isDuo) {
+                        template = getRandom(GENERAL_SCRIPTS_DUO);
+                    } else {
+                        template = getRandom(GENERAL_SCRIPTS_SOLO);
+                    }
+                    const script = formatScript(template, getContext(c1, c2));
+                    
+                    dayLogs.push({ type: 'general', text: script });
+                    c1.status = "휴식 중";
+                    c1.location = ZONES[Math.floor(Math.random() * ZONES.length)].id;
+                    if(isDuo) {
+                        c2.status = "휴식 중";
+                        c2.location = c1.location;
+                    }
+                    return;
+                }
+
+                const traitKey = getRandom(Object.keys(TRAIT_DATA));
+                const traitInfo = TRAIT_DATA[traitKey];
+                
+                const location = traitInfo.room;
+                c1.location = location;
+                if (isDuo) c2.location = location;
+
+                let t1 = getEffectiveTrait(c1, traitKey);
+                
+                if (!isDuo) {
+                    const isSuccess = Math.random() < 0.6;
+                    const resultKey = isSuccess ? 'success' : 'fail';
+                    const boolKey = t1 ? 'yes' : 'no';
+                    
+                    const templates = traitInfo[resultKey][boolKey];
+                    const script = formatScript(getRandom(templates), getContext(c1));
+                    
+                    dayLogs.push({ type: isSuccess ? 'success' : 'fail', text: script });
+                    c1.status = isSuccess ? `${traitInfo.text} (성공)` : `${traitInfo.text} (실패)`;
+
+                } else {
+                    let t2 = getEffectiveTrait(c2, traitKey);
+                    const isSame = (t1 === t2);
+                    let resultKey = 'same_no';
+
+                    if (isSame) {
+                        resultKey = t1 ? 'same_yes' : 'same_no';
+                    } else {
+                        resultKey = 'diff';
+                        if (!t1 && t2) {
+                            [c1, c2] = [c2, c1];
+                            [t1, t2] = [t2, t1];
+                        }
+                    }
+                    
+                    let successRate = isSame ? 0.7 : 0.4;
+                    const isSuccess = Math.random() < successRate; 
+                    
+                    const templates = traitInfo.duo[resultKey][isSuccess ? 'success' : 'fail'];
+                    const script = formatScript(getRandom(templates), getContext(c1, c2));
+
+                    let relChange;
+                    if (isSuccess) {
+                        relChange = Math.floor(Math.random() * 15) + 1; 
+                    } else {
+                        relChange = -(Math.floor(Math.random() * 15) + 1); 
+                    }
+                    
+                    updateRelationship(c1, c2, relChange);
+
+                    dayLogs.push({ 
+                        type: isSuccess ? 'success' : 'fail', 
+                        text: script,
+                        subtext: `친밀도 ${relChange > 0 ? '+' : ''}${relChange}`
+                    });
+                    
+                    c1.status = `${c2.name}와 함께함`;
+                    c2.status = `${c1.name}와 함께함`;
+                }
+            });
+
+            // 최신 이벤트가 위로 오도록 배열을 뒤집고, 가장 위에 날짜 구분선을 추가합니다.
+            dayLogs.reverse();
+            dayLogs.unshift({ type: 'day_marker', day: currentDay });
+
+            state.logs = [...dayLogs, ...state.logs].slice(0, 150);
+
+            // 이벤트가 끝난 후 다음 날짜로 넘어갑니다.
+            document.getElementById('day-display').innerText = state.day;
+            state.day++;
+
+            renderLogs();
+            renderZones();
+            switchTab('logs');
+            
+            // 일지 탭의 최상단으로 스크롤을 이동시킵니다.
+            setTimeout(() => {
+                const scrollTarget = document.getElementById('tab-logs');
+                if(scrollTarget) scrollTarget.scrollTop = 0;
+            }, 50);
+        }
+
+        function getEffectiveTrait(char, traitId) {
+            const val = char.traits[traitId];
+            if (val === true) return true;
+            if (val === false) return false;
+            return Math.random() > 0.5;
+        }
+
+        function updateRelationship(c1, c2, amount) {
+            if (!c1.relationships[c2.id]) c1.relationships[c2.id] = 0;
+            if (!c2.relationships[c1.id]) c2.relationships[c1.id] = 0;
+            c1.relationships[c2.id] = Math.max(-100, Math.min(100, c1.relationships[c2.id] + amount));
+            c2.relationships[c1.id] = Math.max(-100, Math.min(100, c2.relationships[c1.id] + amount));
+        }
+
+        function getContext(c1, c2=null) {
+            const ctx = {
+                name: `<strong class="text-stone-800 dark:text-stone-200">${c1.name}</strong>`,
+                partner: c2 ? `<strong class="text-stone-800 dark:text-stone-200">${c2.name}</strong>` : '',
+                food: getRandom(VOCAB.food),
+                gear: getRandom(VOCAB.gear),
+                animal: getRandom(VOCAB.animal),
+                plant: getRandom(VOCAB.plant),
+                bug: getRandom(VOCAB.bug),
+                snack: getRandom(VOCAB.snack),
+                activity: getRandom(VOCAB.activity)
+            };
+            return ctx;
+        }
+
+        function checkJongseong(word) {
+            if (!word) return false;
+            const lastChar = word.charCodeAt(word.length - 1);
+            if (lastChar < 0xAC00 || lastChar > 0xD7A3) return false; 
+            return (lastChar - 0xAC00) % 28 > 0;
+        }
+
+        function resolveJosa(text) {
+             return text.replace(/(.)(은\(는\)|이\(가\)|을\(를\)|와\(과\))/g, (match, prevChar, josaType) => {
+                const hasJongseong = checkJongseong(prevChar);
+                let selectedJosa = '';
+                
+                if (josaType === '은(는)') selectedJosa = hasJongseong ? '은' : '는';
+                else if (josaType === '이(가)') selectedJosa = hasJongseong ? '이' : '가';
+                else if (josaType === '을(를)') selectedJosa = hasJongseong ? '을' : '를';
+                else if (josaType === '와(과)') selectedJosa = hasJongseong ? '과' : '와';
+                
+                return prevChar + selectedJosa;
+            });
+        }
+
+        function formatScript(template, data) {
+            let replaced = template.replace(/\{([a-zA-Z0-9]+)\}/g, (match, key) => {
+                return data[key] || match;
+            });
+            
+            replaced = replaced.replace(/(<[^>]+>)?([^<]+)(<\/[^>]+>)?(은\(는\)|이\(가\)|을\(를\)|와\(과\))/g, (match, openTag, content, closeTag, josaType) => {
+                const lastChar = content[content.length - 1];
+                const hasJongseong = checkJongseong(lastChar);
+                
+                let selectedJosa = '';
+                if (josaType === '은(는)') selectedJosa = hasJongseong ? '은' : '는';
+                else if (josaType === '이(가)') selectedJosa = hasJongseong ? '이' : '가';
+                else if (josaType === '을(를)') selectedJosa = hasJongseong ? '을' : '를';
+                else if (josaType === '와(과)') selectedJosa = hasJongseong ? '과' : '와';
+                
+                return (openTag || '') + content + (closeTag || '') + selectedJosa;
+            });
+
+            return replaced;
+        }
+
+        function getRandom(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('log-container');
+            container.innerHTML = '';
+            
+            if (state.logs && state.logs.length > 0) {
+                state.logs.forEach(log => {
+                    const div = document.createElement('div');
+                    
+                    if (log.type === 'day_marker') {
+                        // 날짜 구분선 스타일
+                        div.className = 'flex items-center py-5 animate-fade-in w-full';
+                        div.innerHTML = `
+                            <div class="flex-grow border-t border-stone-200 dark:border-slate-700"></div>
+                            <span class="flex-shrink-0 mx-4 text-amber-700 dark:text-amber-400 text-xs font-bold tracking-widest uppercase bg-amber-50 dark:bg-amber-900/30 px-4 py-1.5 rounded-full border border-amber-200 dark:border-amber-800/50 shadow-sm">Day ${log.day}</span>
+                            <div class="flex-grow border-t border-stone-200 dark:border-slate-700"></div>
+                        `;
+                    } else {
+                        // 일반 로그 스타일
+                        let style = log.type === 'success' ? 'border-green-400 text-stone-800 dark:text-stone-200' :
+                                    log.type === 'fail' ? 'border-red-400 text-stone-800 dark:text-stone-200' :
+                                    'border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400';
+                        
+                        div.className = `log-item bg-white dark:bg-slate-800 p-3 rounded-r-lg shadow-sm animate-fade-in ${style}`;
+                        div.innerHTML = `
+                            <div>
+                                <p class="text-sm">${log.text}</p>
+                                ${log.subtext ? `<p class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1">${log.subtext}</p>` : ''}
+                            </div>
+                        `;
+                    }
+                    container.appendChild(div);
+                });
+            }
+        }
+
+        // --- UI Rendering ---
+        function switchTab(tabId) {
+            ['members', 'camp', 'logs'].forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                const btn = document.querySelector(`button[data-tab="${t}"]`);
+                if (t === tabId) {
+                    el.classList.remove('hidden');
+                    setTimeout(() => { el.classList.remove('opacity-0'); el.classList.add('opacity-100'); }, 50);
+                    btn.classList.add('text-amber-600', 'active', 'dark:text-amber-400');
+                    btn.classList.remove('text-stone-400');
+                } else {
+                    el.classList.add('opacity-0', 'hidden');
+                    el.classList.remove('opacity-100');
+                    btn.classList.remove('text-amber-600', 'active', 'dark:text-amber-400');
+                    btn.classList.add('text-stone-400');
+                }
+            });
+        }
+
+        function renderTraitTable() {
+            const headerRow = document.getElementById('table-header-row');
+            const tbody = document.getElementById('trait-table-body');
+            const emptyState = document.getElementById('empty-state');
+            
+            headerRow.innerHTML = '';
+            tbody.innerHTML = '';
+
+            if (state.characters.length === 0) {
+                emptyState.style.display = 'block';
+                document.getElementById('trait-table').classList.add('hidden');
+                return;
+            }
+            emptyState.style.display = 'none';
+            document.getElementById('trait-table').classList.remove('hidden');
+
+            const cornerTh = document.createElement('th');
+            cornerTh.className = "sticky-corner px-3 py-2 min-w-[100px] border-b border-stone-200 dark:border-slate-600 z-30 font-bold text-stone-700 dark:text-stone-200 bg-stone-50 dark:bg-slate-800";
+            cornerTh.innerText = "성향 / 이름";
+            headerRow.appendChild(cornerTh);
+
+            state.characters.forEach(char => {
+                const th = document.createElement('th');
+                th.className = "sticky-col-header px-2 py-3 min-w-[70px] text-center border-b border-stone-200 dark:border-slate-600 bg-stone-50/95 dark:bg-slate-800/95 backdrop-blur z-20 group";
+                th.innerHTML = `
+                    <div class="flex flex-col items-center">
+                        <span class="font-bold text-stone-700 dark:text-stone-200 text-sm truncate w-full">${char.name}</span>
+                        <button onclick="deleteCharacter('${char.id}')" class="text-[10px] text-stone-300 hover:text-red-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-trash"></i></button>
+                    </div>`;
+                headerRow.appendChild(th);
+            });
+
+            Object.keys(TRAIT_DATA).forEach(key => {
+                const trait = TRAIT_DATA[key];
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-stone-50 dark:hover:bg-slate-700/50 transition-colors";
+                
+                const tdLabel = document.createElement('td');
+                tdLabel.className = "sticky-row-header px-3 py-2 font-medium text-stone-600 dark:text-stone-300 text-xs z-10 flex items-center gap-2 border-r border-stone-100 dark:border-slate-600";
+                tdLabel.innerHTML = `<i class="fa-solid ${trait.icon} text-amber-500 w-4 text-center"></i> ${trait.text}`;
+                tr.appendChild(tdLabel);
+
+                state.characters.forEach(char => {
+                    const td = document.createElement('td');
+                    td.className = "px-1 py-1 text-center border-l border-stone-100 dark:border-slate-700";
+                    const val = char.traits[key];
+                    let btnClass = val === true ? "bg-green-100 text-green-600 border-green-200 dark:bg-green-900/40 dark:text-green-400" :
+                                   val === false ? "bg-red-100 text-red-600 border-red-200 dark:bg-red-900/40 dark:text-red-400" :
+                                    "bg-stone-100 text-stone-300 border-stone-200 dark:bg-slate-700 dark:text-slate-500 dark:border-slate-600";
+                    let icon = val === true ? "fa-check" : val === false ? "fa-xmark" : "fa-question";
+
+                    td.innerHTML = `<button onclick="cycleTrait('${char.id}', '${key}')" class="w-6 h-6 rounded border flex items-center justify-center mx-auto text-xs ${btnClass}"><i class="fa-solid ${icon}"></i></button>`;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function cycleTrait(charId, traitId) {
+            const char = state.characters.find(c => c.id === charId);
+            const current = char.traits[traitId];
+            char.traits[traitId] = current === null ? true : (current === true ? false : null);
+            renderTraitTable();
+        }
+
+        function randomizeTraits() {
+            if (state.characters.length === 0) return showToast('먼저 캐릭터를 등록해주세요.', 'error');
+            
+            const options = [true, false, null];
+            state.characters.forEach(char => {
+                Object.keys(TRAIT_DATA).forEach(traitKey => {
+                    char.traits[traitKey] = options[Math.floor(Math.random() * options.length)];
+                });
+            });
+            
+            renderTraitTable();
+            showToast('모든 캐릭터의 성향이 랜덤으로 배정되었습니다.', 'success');
+        }
+
+        function deleteCharacter(id) {
+            showConfirm('삭제하시겠습니까?', () => {
+                state.characters = state.characters.filter(c => c.id !== id);
+                renderTraitTable();
+                updateUI();
+            });
+        }
+
+        function renderZones() {
+            const mapContainer = document.getElementById('camp-map');
+            mapContainer.innerHTML = '';
+            ZONES.forEach(zone => {
+                const div = document.createElement('div');
+                div.className = `glass-panel rounded-2xl p-4 flex flex-col relative overflow-hidden ${zone.color} border border-opacity-60 dark:border-opacity-30`;
+                div.innerHTML = `
+                    <div class="flex items-center gap-2 mb-3 text-stone-700 dark:text-stone-300 opacity-80">
+                        <i class="fa-solid ${zone.icon}"></i> <span class="font-bold text-sm">${zone.name}</span>
+                    </div>
+                    <div class="flex-1 flex flex-wrap gap-2 content-start min-h-[40px]" id="zone-${zone.id}"></div>
+                `;
+                const charContainer = div.querySelector(`#zone-${zone.id}`);
+                state.characters.filter(c => c.location === zone.id).forEach(char => {
+                    const avatar = document.createElement('div');
+                    avatar.className = "w-9 h-9 rounded-full bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center text-xs font-bold text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-slate-600 cursor-pointer hover:scale-110 z-10 transition-transform";
+                    avatar.innerText = char.name.substring(0, 2);
+                    avatar.onclick = () => showCharDetails(char);
+                    charContainer.appendChild(avatar);
+                });
+                mapContainer.appendChild(div);
+            });
+        }
+
+        function showCharDetails(char) {
+            const modal = document.getElementById('modal');
+            document.getElementById('modal-title').innerText = char.name;
+            
+            let relHtml = '<div class="mt-4"><h4 class="font-bold text-xs mb-2 text-stone-400">관계도</h4><div class="grid grid-cols-2 gap-2 text-xs">';
+            state.characters.forEach(other => {
+                if (other.id === char.id) return;
+                const score = char.relationships[other.id] || 0;
+                let found = REL_TIERS[3];
+                for(let i=0; i<REL_TIERS.length; i++) {
+                     if(score >= REL_TIERS[i].min) found = REL_TIERS[i];
+                }
+
+                relHtml += `
+                    <div class="bg-stone-50 dark:bg-slate-700/50 p-2 rounded border border-stone-100 dark:border-slate-600">
+                        <span class="font-bold text-stone-700 dark:text-stone-300">${other.name}</span>
+                        <span class="${found.color} block mt-0.5">${found.label} (${score})</span>
+                    </div>`;
+            });
+            relHtml += '</div></div>';
+
+            const activeTraits = Object.entries(char.traits).filter(([k,v]) => v===true).map(([k]) => TRAIT_DATA[k].text).join(', ');
+            
+            document.getElementById('modal-content').innerHTML = `
+                <p><span class="font-bold text-stone-500 dark:text-stone-400">상태:</span> ${char.status || '-'}</p>
+                <p class="text-xs mt-2 text-green-600 dark:text-green-400 font-medium">성향(O): ${activeTraits || '없음'}</p>
+                ${relHtml}
+            `;
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        
+        function updateUI() {
+            const startBtn = document.getElementById('btn-next-day');
+            if (!state.isStarted) {
+                startBtn.disabled = true;
+                startBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-stone-400');
+                startBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+            } else {
+                startBtn.disabled = false;
+                startBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-stone-400');
+                startBtn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+            }
+        }
+    </script>
+</body>
+</html>
